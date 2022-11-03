@@ -21,7 +21,7 @@ params.output_dir = "${projectDir}/results" // Output directory
 // -----------------------------------------------------------------------------
 
 // Align the draft genome to the reference genome
-process MINIMAP2 {
+process MINIMAP2_DRAFT {
 
     cpus 1
     conda '/home/liam/miniconda3/envs/minimap2'
@@ -32,14 +32,14 @@ process MINIMAP2 {
     path(draft_fa)
 
     output:
-    path("alignment.sam"), emit: sam
+    path("draft_alignment.sam"), emit: sam
     
     script:
     """
     minimap2 -a -x asm5 --eqx \
         ${reference_fa} \
         ${draft_fa} \
-        > alignment.sam
+        > draft_alignment.sam
     """
 
 }
@@ -90,6 +90,88 @@ process SEPARATE_CONTIGS {
 
 }
 
+// Align the scaffolded draft genome to the reference genome
+process MINIMAP2_SCAFFOLD {
+
+    cpus 1
+    conda '/home/liam/miniconda3/envs/minimap2'
+    tag "${reference_fa} x ${placed_fa}"
+
+    input:
+    path(reference_fa)
+    path(placed_fa)
+
+    output:
+    path("scaffold_alignment.sam"), emit: sam
+    
+    script:
+    """
+    minimap2 -a -x asm5 --eqx \
+        ${reference_fa} \
+        ${placed_fa} \
+        > scaffold_alignment.sam
+    """
+
+}
+
+// Identify structural differences between the draft and reference genomes using
+// SyRI
+process SYRI {
+
+    cpus 1
+    conda '/home/liam/miniconda3/envs/syri'
+    
+    input:
+    path(alignment_sam)
+    path(reference_fa)
+    path(placed_fa)
+
+    output:
+    path("syri.log"), emit: log
+    path("syri.out"), emit: out
+    path("syri.summary"), emit: summary
+    path("syri.vcf"), emit: vcf
+
+    script:
+    """
+    syri -F S --no-chrmatch \
+        -c ${alignment_sam} \
+        -r ${reference_fa} \
+        -q ${placed_fa}
+    """
+
+}
+
+// Visualize structural differences between genomes
+process PLOTSR {
+
+    cpus 1
+    conda '/home/liam/miniconda3/envs/plotsr'
+    
+    input:
+    path(syri_out)
+    // Need to input reference_fa and placed_fa so that plotsr can locate them
+    path(reference_fa)
+    path(placed_fa)
+
+    output:
+    path("output_plot.png"), emit: png
+
+    script:
+    """
+    cat << EOF > genomes.txt
+    #file	name
+    reference.fa	reference
+    placed_seqs.fa	draft
+    EOF
+
+    plotsr \
+        --sr ${syri_out} \
+        --genomes genomes.txt \
+        -o output_plot.png
+    """
+
+}
 
 // -----------------------------------------------------------------------------
 // CHANNELS
@@ -107,12 +189,15 @@ workflow {
     // reference_ch.view()
     // draft_ch.view()
 
-    align_genomes = MINIMAP2(reference_ch, draft_ch)
-    // align_genomes.view()
+    minimap2_draft = MINIMAP2_DRAFT(reference_ch, draft_ch)
 
-    scaffold_draft = RAGTAG(reference_ch, draft_ch)
-    // scaffold_draft.fasta.view()
+    ragtag = RAGTAG(reference_ch, draft_ch)
 
-    separate_contigs = SEPARATE_CONTIGS(scaffold_draft.fasta)
+    separate_contigs = SEPARATE_CONTIGS(ragtag.fasta)
 
+    minimap2_scaffold = MINIMAP2_SCAFFOLD(reference_ch, separate_contigs.placed_fa)
+
+    syri = SYRI(minimap2_scaffold.sam, reference_ch, separate_contigs.placed_fa)
+
+    plotsr = PLOTSR(syri.out, reference_ch, separate_contigs.placed_fa)
 }
