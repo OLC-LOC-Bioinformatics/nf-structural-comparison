@@ -120,6 +120,7 @@ process SYRI {
 
     cpus 1
     conda '/home/liam/miniconda3/envs/syri'
+    publishDir "${projectDir}/results/syri", mode: 'copy'
     
     input:
     path(alignment_sam)
@@ -147,6 +148,7 @@ process PLOTSR {
 
     cpus 1
     conda '/home/liam/miniconda3/envs/plotsr'
+    publishDir "${projectDir}/results/plotsr", mode: 'copy'
     
     input:
     path(syri_out)
@@ -155,20 +157,27 @@ process PLOTSR {
     path(placed_fa)
 
     output:
-    path("output_plot.png"), emit: png
+    path("plotsr_default.png"), emit: png_default
+    path("plotsr_itx.png"), emit: png_itx
 
     script:
     """
     cat << EOF > genomes.txt
     #file	name
-    reference.fa	reference
-    placed_seqs.fa	draft
+    ${reference_fa}	reference
+    ${placed_fa}	draft
     EOF
 
     plotsr \
         --sr ${syri_out} \
         --genomes genomes.txt \
-        -o output_plot.png
+        -o plotsr_default.png
+
+    plotsr \
+        --sr ${syri_out} \
+        --genomes genomes.txt \
+        -o plotsr_itx.png \
+        --itx
     """
 
 }
