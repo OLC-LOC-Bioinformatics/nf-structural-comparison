@@ -20,7 +20,7 @@ params.output_dir = "${projectDir}/results" // Output directory
 // PROCESSES
 // -----------------------------------------------------------------------------
 
-// Align the draft genome to the reference genome
+// Align the draft genome to the reference genome using Minimap2
 process MINIMAP2_DRAFT {
 
     cpus 1
@@ -33,6 +33,7 @@ process MINIMAP2_DRAFT {
 
     output:
     path("draft_alignment.sam"), emit: sam
+    path("draft_alignment.paf"), emit: paf
     
     script:
     """
@@ -40,6 +41,10 @@ process MINIMAP2_DRAFT {
         ${reference_fa} \
         ${draft_fa} \
         > draft_alignment.sam
+    minimap2 -x asm5 --eqx \
+        ${reference_fa} \
+        ${draft_fa} \
+        > draft_alignment.paf
     """
 
 }
@@ -103,13 +108,18 @@ process MINIMAP2_SCAFFOLD {
 
     output:
     path("scaffold_alignment.sam"), emit: sam
+    path("scaffold_alignment.paf"), emit: paf
     
     script:
     """
     minimap2 -a -x asm5 --eqx \
         ${reference_fa} \
         ${placed_fa} \
-        > scaffold_alignment.sam
+        > scaffold_alignment.sam && \
+    minimap2 -x asm5 --eqx \
+        ${reference_fa} \
+        ${placed_fa} \
+        > scaffold_alignment.paf
     """
 
 }
@@ -182,6 +192,71 @@ process PLOTSR {
 
 }
 
+// Align the draft genome to the reference genome using nucmer, map each
+// position of each reference to its best hit in the query, and output
+// alignment coordinates
+process MUMMER_DRAFT {
+
+    cpus 4
+    conda '/home/liam/miniconda3/envs/mummer'
+    tag "${reference_fa} x ${draft_fa}"    
+
+    input:
+    path(reference_fa)
+    path(draft_fa)
+
+    output:
+    path("draft_alignment.delta"), emit: delta   
+    path("draft_alignment.delta.filter"), emit: filter
+    path("draft_alignment.delta.filter.coords"), emit: coords
+
+    script:
+    """
+    nucmer -p draft_alignment ${reference_fa} ${draft_fa} && \
+    delta-filter -r draft_alignment.delta > draft_alignment.delta.filter && \
+    show-coords -c draft_alignment.delta.filter > draft_alignment.delta.filter.coords
+    """
+
+}
+
+// Generate interactive dotplots of the genome alignments
+process DOTPLOTLY {
+
+    cpus 4
+    conda '/home/liam/miniconda3/envs/dotplotly'
+    publishDir "${projectDir}/results/dotplotly", mode: 'copy'
+
+    input:
+    path(nucmer_draft_coords)
+    path(minimap2_draft_paf)
+    path(minimap2_scaffold_paf)
+
+    output:
+    path("nucmer_draft_dotplot.png"), emit: nucmer_draft_png
+    path("minimap2_draft_dotplot.png"), emit: minimap2_draft_png
+    path("minimap2_scaffold_dotplot.png"), emit: minimap2_scaffold_png
+    path("nucmer_draft_dotplot.html"), emit: nucmer_draft_html
+    path("minimap2_draft_dotplot.html"), emit: minimap2_draft_html
+    path("minimap2_scaffold_dotplot.html"), emit: minimap2_scaffold_html 
+
+    script:
+    """
+    Rscript ${projectDir}/bin/dotPlotly/mummerCoordsDotPlotly.R -s -t -l \
+        -m 0 -q 0 \
+        -i ${nucmer_draft_coords} \
+        -o nucmer_draft_dotplot && \
+    Rscript ${projectDir}/bin/dotPlotly/pafCoordsDotPlotly.R -s -t -l \
+        -m 0 -q 0 \
+        -i ${minimap2_draft_paf} \
+        -o minimap2_draft_dotplot && \
+    Rscript ${projectDir}/bin/dotPlotly/pafCoordsDotPlotly.R -s -t -l \
+        -m 0 -q 0 \
+            -i ${minimap2_scaffold_paf} \
+            -o minimap2_scaffold_dotplot
+    """
+
+}
+
 // -----------------------------------------------------------------------------
 // CHANNELS
 // -----------------------------------------------------------------------------
@@ -200,6 +275,8 @@ workflow {
 
     minimap2_draft = MINIMAP2_DRAFT(reference_ch, draft_ch)
 
+    mummer_draft = MUMMER_DRAFT(reference_ch, draft_ch)
+
     ragtag = RAGTAG(reference_ch, draft_ch)
 
     separate_contigs = SEPARATE_CONTIGS(ragtag.fasta)
@@ -209,4 +286,7 @@ workflow {
     syri = SYRI(minimap2_scaffold.sam, reference_ch, separate_contigs.placed_fa)
 
     plotsr = PLOTSR(syri.out, reference_ch, separate_contigs.placed_fa)
+
+    dotplotly = DOTPLOTLY(mummer_draft.coords, minimap2_draft.paf, minimap2_scaffold.paf)
+
 }
