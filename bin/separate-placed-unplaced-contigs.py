@@ -20,6 +20,19 @@ import argparse
 from Bio import SeqIO
 
 #-------------------------------------------------------------------------------
+# Custom exceptions
+#-------------------------------------------------------------------------------
+
+class NoPlacedSeqsError(Exception):
+    """
+    Raise this error when no contigs from the draft genome could be placed
+    (scaffoled) using the reference genome.
+    """
+    pass
+
+#-------------------------------------------------------------------------------
+# parse_arguments()
+#-------------------------------------------------------------------------------
 
 def parse_arguments():
     """
@@ -54,6 +67,10 @@ def parse_arguments():
     args = parser.parse_args()
     return args
 
+#-------------------------------------------------------------------------------
+# Other functions
+#-------------------------------------------------------------------------------
+
 def extract_seqs(scaffolded_draft, placed_fasta, unplaced_fasta):
     """
     Extract the placed (scaffolded) and unplaced sequences of the draft genome
@@ -84,18 +101,17 @@ def extract_seqs(scaffolded_draft, placed_fasta, unplaced_fasta):
                     unplaced_seqs.append(record)
 
         elif os.path.isfile(placed_fasta):
-            sys.exit(f'ERROR: File "{placed_fasta}" already exists.\n'
-            'Please remove this file or move it to a different location and '
-            'then re-run this script.')
+            raise OSError(f"""
+            File '{placed_fasta}' already exists. Please remove this file or
+            move it to a different location and then re-run this script.
+            """)
 
         elif os.path.isfile(unplaced_fasta):
-            sys.exit(f'ERROR: File "{unplaced_fasta}" already exists.\n'
-            'Please remove this file or move it to a different location and '
-            'then re-run this script.')
-
-        else:
-            sys.exit('ERROR: Something unknown happened.')
-    
+            raise OSError(f"""
+            File '{unplaced_fasta}' already exists. Please remove this file or
+            move it to a different location and then re-run this script.
+            """)
+  
     return placed_seqs, unplaced_seqs
 
 def write_output_files(placed_seqs, unplaced_seqs, scaffolded_draft, 
@@ -113,15 +129,18 @@ def write_output_files(placed_seqs, unplaced_seqs, scaffolded_draft,
         print(f"Writing {len(placed_seqs)} placed sequences to '{placed_fasta}'.")
         SeqIO.write(placed_seqs, placed_fasta, 'fasta')
     else:
-        sys.exit(f"No placed sequences were detected in {scaffolded_draft}.\n"
-        "Exiting...")
+        raise NoPlacedSeqsError(f"""
+        No placed sequences were detected in {scaffolded_draft}. Exiting...
+        """)
 
     if len(unplaced_seqs) > 0:
         print(f"Writing {len(unplaced_seqs)} unplaced sequences to '{unplaced_fasta}'.")
         SeqIO.write(unplaced_seqs, unplaced_fasta, 'fasta')
     else:
-        print("All sequences were placed (scaffolded).\n"
-        f"Output '{unplaced_fasta}' was not created.")
+        print(f"""
+        All sequences were placed (scaffolded). Output '{unplaced_fasta}' was
+        not created.
+        """)
 
 #-------------------------------------------------------------------------------
 # main()
