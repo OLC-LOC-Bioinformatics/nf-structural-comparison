@@ -7,4 +7,8 @@ This workflow uses [SyRI](https://github.com/schneebergerlab/syri) to compare al
 
 ## Overview
 
+Presently, only the left side of the overview shown below is available for use (comparing a scaffold-level genome to a reference genome):
+
 ![Overview of nf-structural-comparison workflow](assets/nf-structural-comparison-workflow.png)
+
+Future updates will allow users to choose between analyzing a query genome that is at scaffold-level (low contiguity) or analyzing a query genome that is at chromosome-level (high contiguity).
