@@ -1,0 +1,6 @@
+sampleid	group	ref_query	file_path
+I2231_0_chromosome1	I2231	ref	/mnt/j/projects/amr2-plasmid-evol/chromosomes/I2231_0_chromosome1.fasta
+I2231_48_chromosome1	I2231	query	/mnt/j/projects/amr2-plasmid-evol/chromosomes/I2231_48_chromosome1.fasta
+I2231_49_chromosome1	I2231	query	/mnt/j/projects/amr2-plasmid-evol/chromosomes/I2231_49_chromosome1.fasta
+I2231_50_chromosome1	I2231	query	/mnt/j/projects/amr2-plasmid-evol/chromosomes/I2231_50_chromosome1.fasta
+I2231_100_chromosome1	I2231	query	/mnt/j/projects/amr2-plasmid-evol/chromosomes/I2231_100_chromosome1.fasta
